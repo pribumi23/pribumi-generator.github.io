@@ -3,36 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Source Generator Load Balance PCC Mikrotik</title>
+    <title>PCC Load Balance Generator</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 0;
+            margin: 20px;
         }
-        header {
-            background-color: #333;
-            color: white;
-            padding: 20px;
-            text-align: center;
+        .container {
+            max-width: 600px;
+            margin: auto;
         }
-        section {
-            padding: 20px;
+        .form-group {
+            margin-bottom: 15px;
         }
-        label, input, select {
-            font-size: 14px;
-            padding: 5px;
-            margin: 5px;
+        label {
+            display: block;
+            margin-bottom: 5px;
         }
-        textarea {
+        input, select, button {
             width: 100%;
-            height: 300px;
-            margin-top: 10px;
+            padding: 8px;
+            margin-top: 5px;
         }
         button {
-            padding: 10px;
-            font-size: 14px;
             background-color: #4CAF50;
             color: white;
             border: none;
@@ -41,128 +34,71 @@
         button:hover {
             background-color: #45a049;
         }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
+    <div class="container">
+        <h1>Mikrotik PCC Load Balance Generator</h1>
+        <form id="pccForm">
+            <div class="form-group">
+                <label for="interfaceCount">Number of Interfaces (Max 10):</label>
+                <select id="interfaceCount">
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="failover">Enable Failover:</label>
+                <select id="failover">
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+            <button type="button" onclick="generateConfig()">Generate Configuration</button>
+        </form>
 
-<header>
-    <h1>Source Generator Load Balance PCC Mikrotik</h1>
-    <p>Generate Mikrotik PCC Load Balance Script with Failover and up to 10 Interfaces</p>
-</header>
+        <textarea id="configOutput" readonly placeholder="Generated configuration will appear here..."></textarea>
+    </div>
 
-<section>
-    <form id="pccForm">
-        <label for="interfaceIn">Interface Inbound (Local):</label>
-        <input type="text" id="interfaceIn" required>
+    <script>
+        function generateConfig() {
+            const interfaceCount = document.getElementById('interfaceCount').value;
+            const failover = document.getElementById('failover').value;
+            let config = '';
 
-        <label for="srcAddress">Source Address (for PCC):</label>
-        <input type="text" id="srcAddress" required>
+            config += '/ip firewall mangle\n';
 
-        <label for="interfacesCount">Select number of Interfaces (up to 10):</label>
-        <select id="interfacesCount" onchange="adjustInterfaceFields()" required>
-            <option value="2">2 Interfaces</option>
-            <option value="3">3 Interfaces</option>
-            <option value="4">4 Interfaces</option>
-            <option value="5">5 Interfaces</option>
-            <option value="6">6 Interfaces</option>
-            <option value="7">7 Interfaces</option>
-            <option value="8">8 Interfaces</option>
-            <option value="9">9 Interfaces</option>
-            <option value="10">10 Interfaces</option>
-        </select>
-
-        <div id="interfaceFields">
-            <!-- Interface input fields will be added dynamically based on the selection -->
-        </div>
-
-        <button type="button" onclick="generateScript()">Generate Script</button>
-    </form>
-
-    <h2>Generated Script:</h2>
-    <textarea id="generatedScript" readonly></textarea>
-</section>
-
-<script>
-    // Function to adjust input fields based on selected interface count
-    function adjustInterfaceFields() {
-        const interfaceCount = document.getElementById('interfacesCount').value;
-        const interfaceFields = document.getElementById('interfaceFields');
-        interfaceFields.innerHTML = '';  // Clear previous fields
-
-        for (let i = 1; i <= interfaceCount; i++) {
-            const interfaceHTML = `
-                <label for="interfaceOut${i}">Interface Outbound ${i}:</label>
-                <input type="text" id="interfaceOut${i}" required>
-                <label for="gateway${i}">Gateway ${i} IP:</label>
-                <input type="text" id="gateway${i}" required>
-            `;
-            interfaceFields.insertAdjacentHTML('beforeend', interfaceHTML);
-        }
-    }
-
-    // Function to generate the Mikrotik script based on user input
-    function generateScript() {
-        const interfaceIn = document.getElementById("interfaceIn").value;
-        const srcAddress = document.getElementById("srcAddress").value;
-        const interfaceCount = document.getElementById('interfacesCount').value;
-
-        let script = `/ip route\n`;
-
-        // Generate routes for each selected interface
-        for (let i = 1; i <= interfaceCount; i++) {
-            const interfaceOut = document.getElementById(`interfaceOut${i}`).value;
-            const gateway = document.getElementById(`gateway${i}`).value;
-            if (interfaceOut && gateway) {
-                script += `add distance=${i} gateway=${gateway} routing-table=main check-gateway=ping\n`;
+            for (let i = 1; i <= interfaceCount; i++) {
+                config += `add chain=prerouting in-interface=ether${i} connection-mark=no-mark action=mark-connection new-connection-mark=ISP${i}_conn passthrough=yes\n`;
+                config += `add chain=prerouting in-interface=ether${i} connection-mark=ISP${i}_conn action=mark-routing new-routing-mark=to_ISP${i} passthrough=yes\n`;
             }
-        }
 
-        // Add firewall mangling to mark connections based on source address
-        script += `/ip firewall mangle\n`;
-        for (let i = 1; i <= interfaceCount; i++) {
-            const interfaceOut = document.getElementById(`interfaceOut${i}`).value;
-            if (interfaceOut) {
-                script += `add action=mark-connection chain=prerouting in-interface=${interfaceIn} src-address=${srcAddress} new-connection-mark=conn${i}\n`;
+            config += '\n/ip route\n';
+            for (let i = 1; i <= interfaceCount; i++) {
+                config += `add gateway=ISP${i}_gateway routing-mark=to_ISP${i}\n`;
             }
-        }
 
-        // Add routing marks to mark packets based on connection mark
-        script += `/ip firewall mangle\n`;
-        for (let i = 1; i <= interfaceCount; i++) {
-            const interfaceOut = document.getElementById(`interfaceOut${i}`).value;
-            if (interfaceOut) {
-                script += `add action=mark-routing chain=prerouting connection-mark=conn${i} new-routing-mark=to_gateway${i}\n`;
+            if (failover === 'yes') {
+                config += '\n# Failover configuration\n';
+                for (let i = 1; i <= interfaceCount; i++) {
+                    config += `add check-gateway=ping distance=${i} gateway=ISP${i}_gateway\n`;
+                }
             }
+
+            document.getElementById('configOutput').value = config;
         }
-
-        // Add the routes with routing marks
-        script += `/ip route\n`;
-        for (let i = 1; i <= interfaceCount; i++) {
-            const gateway = document.getElementById(`gateway${i}`).value;
-            if (gateway) {
-                script += `add gateway=${gateway} routing-mark=to_gateway${i} check-gateway=ping\n`;
-            }
-        }
-
-        // Failover configuration - setting the routes with different distances for failover
-        script += `/ip route\n`;
-        for (let i = 1; i <= interfaceCount; i++) {
-            const gateway = document.getElementById(`gateway${i}`).value;
-            if (gateway) {
-                const distance = i === 1 ? 1 : i + 1;
-                script += `add distance=${distance} gateway=${gateway} routing-mark=to_gateway${i} check-gateway=ping\n`;
-            }
-        }
-
-        // Output the generated script into the textarea
-        document.getElementById("generatedScript").value = script;
-    }
-
-    // Initialize form with default values for 2 interfaces
-    window.onload = function() {
-        adjustInterfaceFields();  // Set default interface fields (2 interfaces)
-    };
-</script>
-
+    </script>
 </body>
 </html>
