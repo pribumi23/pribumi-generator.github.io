@@ -47,7 +47,7 @@
 
 <header>
     <h1>Source Generator Load Balance PCC Mikrotik</h1>
-    <p>Generate Mikrotik PCC Load Balance Script with Failover and 10 Interfaces</p>
+    <p>Generate Mikrotik PCC Load Balance Script with Failover and up to 10 Interfaces</p>
 </header>
 
 <section>
@@ -55,23 +55,25 @@
         <label for="interfaceIn">Interface Inbound:</label>
         <input type="text" id="interfaceIn" required>
 
-        <div id="interfaces">
-            <label for="interfaceOut1">Interface Outbound 1:</label>
-            <input type="text" id="interfaceOut1" required>
-            <label for="gateway1">Gateway 1 IP:</label>
-            <input type="text" id="gateway1" required>
-
-            <label for="interfaceOut2">Interface Outbound 2:</label>
-            <input type="text" id="interfaceOut2" required>
-            <label for="gateway2">Gateway 2 IP:</label>
-            <input type="text" id="gateway2" required>
-        </div>
-
-        <!-- More Interface and Gateway Inputs for up to 10 Interfaces -->
-        <div id="extraInterfaces"></div>
-
         <label for="srcAddress">Source Address (for PCC):</label>
         <input type="text" id="srcAddress" required>
+
+        <label for="interfacesCount">Select number of Interfaces (up to 10):</label>
+        <select id="interfacesCount" onchange="adjustInterfaceFields()" required>
+            <option value="2">2 Interfaces</option>
+            <option value="3">3 Interfaces</option>
+            <option value="4">4 Interfaces</option>
+            <option value="5">5 Interfaces</option>
+            <option value="6">6 Interfaces</option>
+            <option value="7">7 Interfaces</option>
+            <option value="8">8 Interfaces</option>
+            <option value="9">9 Interfaces</option>
+            <option value="10">10 Interfaces</option>
+        </select>
+
+        <div id="interfaceFields">
+            <!-- Interface input fields will be added dynamically based on the selection -->
+        </div>
 
         <button type="button" onclick="generateScript()">Generate Script</button>
     </form>
@@ -81,95 +83,75 @@
 </section>
 
 <script>
-    // Function to add additional interface and gateway fields up to 10
-    function addInterfaces() {
-        let interfacesContainer = document.getElementById('extraInterfaces');
-        let interfaceCount = interfacesContainer.children.length / 2;
+    // Function to adjust input fields based on selected interface count
+    function adjustInterfaceFields() {
+        const interfaceCount = document.getElementById('interfacesCount').value;
+        const interfaceFields = document.getElementById('interfaceFields');
+        interfaceFields.innerHTML = '';  // Clear previous fields
 
-        if (interfaceCount < 8) { // Allow up to 8 more interfaces, total 10
-            let interfaceIndex = interfaceCount + 3; // Start from interfaceOut3
-            let newInterfaceHTML = `
-                <label for="interfaceOut${interfaceIndex + 1}">Interface Outbound ${interfaceIndex + 1}:</label>
-                <input type="text" id="interfaceOut${interfaceIndex + 1}" required>
-                <label for="gateway${interfaceIndex + 1}">Gateway ${interfaceIndex + 1} IP:</label>
-                <input type="text" id="gateway${interfaceIndex + 1}" required>
+        for (let i = 1; i <= interfaceCount; i++) {
+            const interfaceHTML = `
+                <label for="interfaceOut${i}">Interface Outbound ${i}:</label>
+                <input type="text" id="interfaceOut${i}" required>
+                <label for="gateway${i}">Gateway ${i} IP:</label>
+                <input type="text" id="gateway${i}" required>
             `;
-            interfacesContainer.insertAdjacentHTML('beforeend', newInterfaceHTML);
+            interfaceFields.insertAdjacentHTML('beforeend', interfaceHTML);
         }
     }
 
-    // Initialize 10 interfaces and gateways on load
-    window.onload = function () {
-        for (let i = 3; i <= 10; i++) {
-            addInterfaces();
-        }
-    };
-
+    // Function to generate the Mikrotik script based on user input
     function generateScript() {
         const interfaceIn = document.getElementById("interfaceIn").value;
         const srcAddress = document.getElementById("srcAddress").value;
+        const interfaceCount = document.getElementById('interfacesCount').value;
 
-        let script = `
-/ip route
-add distance=1 gateway=${document.getElementById("gateway1").value} routing-table=main check-gateway=ping
-add distance=2 gateway=${document.getElementById("gateway2").value} routing-table=main check-gateway=ping
-`;
+        let script = `/ip route\n`;
 
-        for (let i = 3; i <= 10; i++) {
-            let interfaceOut = document.getElementById(`interfaceOut${i}`).value;
-            let gateway = document.getElementById(`gateway${i}`).value;
+        // Generate routes for each selected interface
+        for (let i = 1; i <= interfaceCount; i++) {
+            const interfaceOut = document.getElementById(`interfaceOut${i}`).value;
+            const gateway = document.getElementById(`gateway${i}`).value;
             if (interfaceOut && gateway) {
-                script += `
-add distance=${i} gateway=${gateway} routing-table=main check-gateway=ping
-`;
+                script += `add distance=${i} gateway=${gateway} routing-table=main check-gateway=ping\n`;
             }
         }
 
-        script += `
-/ip firewall mangle
-add action=mark-connection chain=prerouting in-interface=${interfaceIn} src-address=${srcAddress} new-connection-mark=conn1
-`;
-
-        for (let i = 2; i <= 10; i++) {
-            let interfaceOut = document.getElementById(`interfaceOut${i}`).value;
+        // Add firewall mangling to mark connections based on source address
+        script += `/ip firewall mangle\n`;
+        for (let i = 1; i <= interfaceCount; i++) {
+            const interfaceOut = document.getElementById(`interfaceOut${i}`).value;
             if (interfaceOut) {
-                script += `
-add action=mark-connection chain=prerouting in-interface=${interfaceOut} src-address=${srcAddress} new-connection-mark=conn${i}
-`;
+                script += `add action=mark-connection chain=prerouting in-interface=${interfaceIn} src-address=${srcAddress} new-connection-mark=conn${i}\n`;
             }
         }
 
-        script += `
-add action=mark-routing chain=prerouting connection-mark=conn1 new-routing-mark=to_gateway1
-add action=mark-routing chain=prerouting connection-mark=conn2 new-routing-mark=to_gateway2
-`;
-
-        for (let i = 3; i <= 10; i++) {
-            let interfaceOut = document.getElementById(`interfaceOut${i}`).value;
+        // Add routing marks to mark packets based on connection mark
+        script += `/ip firewall mangle\n`;
+        for (let i = 1; i <= interfaceCount; i++) {
+            const interfaceOut = document.getElementById(`interfaceOut${i}`).value;
             if (interfaceOut) {
-                script += `
-add action=mark-routing chain=prerouting connection-mark=conn${i} new-routing-mark=to_gateway${i}
-`;
+                script += `add action=mark-routing chain=prerouting connection-mark=conn${i} new-routing-mark=to_gateway${i}\n`;
             }
         }
 
-        script += `
-/ip route
-add gateway=${document.getElementById("gateway1").value} routing-mark=to_gateway1
-add gateway=${document.getElementById("gateway2").value} routing-mark=to_gateway2
-`;
-
-        for (let i = 3; i <= 10; i++) {
-            let gateway = document.getElementById(`gateway${i}`).value;
+        // Add the routes with routing marks
+        script += `/ip route\n`;
+        for (let i = 1; i <= interfaceCount; i++) {
+            const gateway = document.getElementById(`gateway${i}`).value;
             if (gateway) {
-                script += `
-add gateway=${gateway} routing-mark=to_gateway${i}
-`;
+                script += `add gateway=${gateway} routing-mark=to_gateway${i}\n`;
             }
         }
 
+        // Output the generated script into the textarea
         document.getElementById("generatedScript").value = script;
     }
+
+    // Initialize form with default values for 2 interfaces
+    window.onload = function() {
+        adjustInterfaceFields();  // Set default interface fields (2 interfaces)
+    };
 </script>
 
 </body>
