@@ -52,7 +52,7 @@
 
 <section>
     <form id="pccForm">
-        <label for="interfaceIn">Interface Inbound:</label>
+        <label for="interfaceIn">Interface Inbound (Local):</label>
         <input type="text" id="interfaceIn" required>
 
         <label for="srcAddress">Source Address (for PCC):</label>
@@ -140,7 +140,17 @@
         for (let i = 1; i <= interfaceCount; i++) {
             const gateway = document.getElementById(`gateway${i}`).value;
             if (gateway) {
-                script += `add gateway=${gateway} routing-mark=to_gateway${i}\n`;
+                script += `add gateway=${gateway} routing-mark=to_gateway${i} check-gateway=ping\n`;
+            }
+        }
+
+        // Failover configuration - setting the routes with different distances for failover
+        script += `/ip route\n`;
+        for (let i = 1; i <= interfaceCount; i++) {
+            const gateway = document.getElementById(`gateway${i}`).value;
+            if (gateway) {
+                const distance = i === 1 ? 1 : i + 1;
+                script += `add distance=${distance} gateway=${gateway} routing-mark=to_gateway${i} check-gateway=ping\n`;
             }
         }
 
