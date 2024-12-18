@@ -27,7 +27,7 @@
         }
         textarea {
             width: 100%;
-            height: 200px;
+            height: 300px;
             margin-top: 10px;
         }
         button {
@@ -47,7 +47,7 @@
 
 <header>
     <h1>Source Generator Load Balance PCC Mikrotik</h1>
-    <p>Generate Mikrotik PCC Load Balance Script Automatically</p>
+    <p>Generate Mikrotik PCC Load Balance Script with Failover and 10 Interfaces</p>
 </header>
 
 <section>
@@ -55,17 +55,20 @@
         <label for="interfaceIn">Interface Inbound:</label>
         <input type="text" id="interfaceIn" required>
 
-        <label for="interfaceOut1">Interface Outbound 1:</label>
-        <input type="text" id="interfaceOut1" required>
+        <div id="interfaces">
+            <label for="interfaceOut1">Interface Outbound 1:</label>
+            <input type="text" id="interfaceOut1" required>
+            <label for="gateway1">Gateway 1 IP:</label>
+            <input type="text" id="gateway1" required>
 
-        <label for="interfaceOut2">Interface Outbound 2:</label>
-        <input type="text" id="interfaceOut2" required>
+            <label for="interfaceOut2">Interface Outbound 2:</label>
+            <input type="text" id="interfaceOut2" required>
+            <label for="gateway2">Gateway 2 IP:</label>
+            <input type="text" id="gateway2" required>
+        </div>
 
-        <label for="gateway1">Gateway 1 IP:</label>
-        <input type="text" id="gateway1" required>
-
-        <label for="gateway2">Gateway 2 IP:</label>
-        <input type="text" id="gateway2" required>
+        <!-- More Interface and Gateway Inputs for up to 10 Interfaces -->
+        <div id="extraInterfaces"></div>
 
         <label for="srcAddress">Source Address (for PCC):</label>
         <input type="text" id="srcAddress" required>
@@ -78,34 +81,93 @@
 </section>
 
 <script>
+    // Function to add additional interface and gateway fields up to 10
+    function addInterfaces() {
+        let interfacesContainer = document.getElementById('extraInterfaces');
+        let interfaceCount = interfacesContainer.children.length / 2;
+
+        if (interfaceCount < 8) { // Allow up to 8 more interfaces, total 10
+            let interfaceIndex = interfaceCount + 3; // Start from interfaceOut3
+            let newInterfaceHTML = `
+                <label for="interfaceOut${interfaceIndex + 1}">Interface Outbound ${interfaceIndex + 1}:</label>
+                <input type="text" id="interfaceOut${interfaceIndex + 1}" required>
+                <label for="gateway${interfaceIndex + 1}">Gateway ${interfaceIndex + 1} IP:</label>
+                <input type="text" id="gateway${interfaceIndex + 1}" required>
+            `;
+            interfacesContainer.insertAdjacentHTML('beforeend', newInterfaceHTML);
+        }
+    }
+
+    // Initialize 10 interfaces and gateways on load
+    window.onload = function () {
+        for (let i = 3; i <= 10; i++) {
+            addInterfaces();
+        }
+    };
+
     function generateScript() {
-        // Get user input from the form
         const interfaceIn = document.getElementById("interfaceIn").value;
-        const interfaceOut1 = document.getElementById("interfaceOut1").value;
-        const interfaceOut2 = document.getElementById("interfaceOut2").value;
-        const gateway1 = document.getElementById("gateway1").value;
-        const gateway2 = document.getElementById("gateway2").value;
         const srcAddress = document.getElementById("srcAddress").value;
 
-        // PCC Load Balancing Script Generation
-        const script = `
+        let script = `
 /ip route
-add distance=1 gateway=${gateway1} routing-table=main check-gateway=ping
-add distance=2 gateway=${gateway2} routing-table=main check-gateway=ping
+add distance=1 gateway=${document.getElementById("gateway1").value} routing-table=main check-gateway=ping
+add distance=2 gateway=${document.getElementById("gateway2").value} routing-table=main check-gateway=ping
+`;
 
+        for (let i = 3; i <= 10; i++) {
+            let interfaceOut = document.getElementById(`interfaceOut${i}`).value;
+            let gateway = document.getElementById(`gateway${i}`).value;
+            if (interfaceOut && gateway) {
+                script += `
+add distance=${i} gateway=${gateway} routing-table=main check-gateway=ping
+`;
+            }
+        }
+
+        script += `
 /ip firewall mangle
 add action=mark-connection chain=prerouting in-interface=${interfaceIn} src-address=${srcAddress} new-connection-mark=conn1
-add action=mark-connection chain=prerouting in-interface=${interfaceIn} src-address=${srcAddress} new-connection-mark=conn2
+`;
 
+        for (let i = 2; i <= 10; i++) {
+            let interfaceOut = document.getElementById(`interfaceOut${i}`).value;
+            if (interfaceOut) {
+                script += `
+add action=mark-connection chain=prerouting in-interface=${interfaceOut} src-address=${srcAddress} new-connection-mark=conn${i}
+`;
+            }
+        }
+
+        script += `
 add action=mark-routing chain=prerouting connection-mark=conn1 new-routing-mark=to_gateway1
 add action=mark-routing chain=prerouting connection-mark=conn2 new-routing-mark=to_gateway2
+`;
 
+        for (let i = 3; i <= 10; i++) {
+            let interfaceOut = document.getElementById(`interfaceOut${i}`).value;
+            if (interfaceOut) {
+                script += `
+add action=mark-routing chain=prerouting connection-mark=conn${i} new-routing-mark=to_gateway${i}
+`;
+            }
+        }
+
+        script += `
 /ip route
-add gateway=${gateway1} routing-mark=to_gateway1
-add gateway=${gateway2} routing-mark=to_gateway2
-        `;
+add gateway=${document.getElementById("gateway1").value} routing-mark=to_gateway1
+add gateway=${document.getElementById("gateway2").value} routing-mark=to_gateway2
+`;
 
-        // Output the generated script into the textarea
+        for (let i = 3; i <= 10; i++) {
+            let gateway = document.getElementById(`gateway${i}`).value;
+            if (gateway) {
+                script += `
+add gateway=${gateway} routing-mark=to_gateway${i}
+`;
+            }
+        }
+
         document.getElementById("generatedScript").value = script;
     }
 </script>
