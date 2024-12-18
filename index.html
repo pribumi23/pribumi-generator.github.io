@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Source Generator Load Balance PCC Mikrotik</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #333;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        section {
+            padding: 20px;
+        }
+        label, input, select {
+            font-size: 14px;
+            padding: 5px;
+            margin: 5px;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px;
+            font-size: 14px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Source Generator Load Balance PCC Mikrotik</h1>
+    <p>Generate Mikrotik PCC Load Balance Script Automatically</p>
+</header>
+
+<section>
+    <form id="pccForm">
+        <label for="interfaceIn">Interface Inbound:</label>
+        <input type="text" id="interfaceIn" required>
+
+        <label for="interfaceOut1">Interface Outbound 1:</label>
+        <input type="text" id="interfaceOut1" required>
+
+        <label for="interfaceOut2">Interface Outbound 2:</label>
+        <input type="text" id="interfaceOut2" required>
+
+        <label for="gateway1">Gateway 1 IP:</label>
+        <input type="text" id="gateway1" required>
+
+        <label for="gateway2">Gateway 2 IP:</label>
+        <input type="text" id="gateway2" required>
+
+        <label for="srcAddress">Source Address (for PCC):</label>
+        <input type="text" id="srcAddress" required>
+
+        <button type="button" onclick="generateScript()">Generate Script</button>
+    </form>
+
+    <h2>Generated Script:</h2>
+    <textarea id="generatedScript" readonly></textarea>
+</section>
+
+<script>
+    function generateScript() {
+        // Get user input from the form
+        const interfaceIn = document.getElementById("interfaceIn").value;
+        const interfaceOut1 = document.getElementById("interfaceOut1").value;
+        const interfaceOut2 = document.getElementById("interfaceOut2").value;
+        const gateway1 = document.getElementById("gateway1").value;
+        const gateway2 = document.getElementById("gateway2").value;
+        const srcAddress = document.getElementById("srcAddress").value;
+
+        // PCC Load Balancing Script Generation
+        const script = `
+/ip route
+add distance=1 gateway=${gateway1} routing-table=main check-gateway=ping
+add distance=2 gateway=${gateway2} routing-table=main check-gateway=ping
+
+/ip firewall mangle
+add action=mark-connection chain=prerouting in-interface=${interfaceIn} src-address=${srcAddress} new-connection-mark=conn1
+add action=mark-connection chain=prerouting in-interface=${interfaceIn} src-address=${srcAddress} new-connection-mark=conn2
+
+add action=mark-routing chain=prerouting connection-mark=conn1 new-routing-mark=to_gateway1
+add action=mark-routing chain=prerouting connection-mark=conn2 new-routing-mark=to_gateway2
+
+/ip route
+add gateway=${gateway1} routing-mark=to_gateway1
+add gateway=${gateway2} routing-mark=to_gateway2
+        `;
+
+        // Output the generated script into the textarea
+        document.getElementById("generatedScript").value = script;
+    }
+</script>
+
+</body>
+</html>
